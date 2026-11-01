@@ -17,7 +17,7 @@ concurrency:
 
 jobs:
   test:
-    name: ${{ matrix.os }} ${{ matrix.python-version }}
+    name: ${{ matrix.os }} ${{ matrix.python-version }} ${{ matrix.suite }}
     runs-on: ${{ matrix.os }}
     timeout-minutes: 60
     strategy:
@@ -25,6 +25,9 @@ jobs:
       matrix:
         os: [ubuntu-latest, windows-latest, macos-latest]
         python-version: ["3.12"]
+        # The SAM1 tests (vit_t / vit_t_lm, marked with 'pytest.mark.v1') and everything else
+        # (the SAM2 tests and the annotator) run as separate jobs, so the slow macOS leg runs both in parallel.
+        suite: [v1, v2]
 
     steps:
       - name: Checkout
@@ -53,21 +56,11 @@ jobs:
         shell: bash -l {0}
         run: pip install --no-deps -e .
 
-      # The tests run in two parts: the SAM1 tests (vit_t / vit_t_lm), marked with 'pytest.mark.v1',
-      # and everything else, i.e. the SAM2 tests (hvit_t / hvit_t_cells) and the annotator.
-      # The v2 part also runs when the v1 part fails, and appends to the v1 coverage.
-      - name: Run v1 tests
+      - name: Run ${{ matrix.suite }} tests
         uses: aganders3/headless-gui@v2
         with:
           shell: bash -l {0}
-          run: pytest -m "v1"
-
-      - name: Run v2 tests
-        if: ${{ !cancelled() && steps.install.outcome == 'success' }}
-        uses: aganders3/headless-gui@v2
-        with:
-          shell: bash -l {0}
-          run: pytest -m "not v1" --cov-append
+          run: pytest -m "${{ matrix.suite == 'v1' && 'v1' || 'not v1' }}"
 
       - name: Upload coverage reports to Codecov
         uses: codecov/codecov-action@v3
